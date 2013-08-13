@@ -9,9 +9,6 @@ Usage:
 
 Any source images must be in a common format (TGA, PNG, etc).
 
-Known Limitations:
-    Animation option does nothing, all frames are always dumped.
-
 Arguments:
     <src>                       Sprite texture file.
     <msb>                       Sprite msb file.
@@ -32,7 +29,7 @@ Non-Palette Options
 
 """
 
-__all__ = ["Sprite", "Frame"]
+__all__ = ["Sprite", "Frame", "Animation"]
 __license__ = "MIT"
 __version__ = "0.0.1"
 __status__ = "Development"
@@ -48,6 +45,7 @@ from PIL import Image as PILImage
 from PIL.ImageDraw import Draw as PILDraw
 
 
+Animation = namedtuple('Animation', 'offset length')
 Frame = namedtuple('Frame', 'offset length duration')
 
 
@@ -177,16 +175,18 @@ class Sprite(object):
             self._take(8)  # Unknown
             frames.append(Frame(offset, length, duration))
         # Animations
-        # TODO: Process animation counts greater than one
-        if animation_count > 1:
-            warnings.warn("Multiple animations not yet supported.", RuntimeWarning)
         animations = {}
         for _ in range(animation_count):
             name = self._get_string()
-            # TODO: Values not used
-            val1 = self._get_long()
-            val2 = self._get_long()
-            animations[name] = (val1, val2)
+            start = self._get_int()
+            length = self._get_int()
+            self._get_int()  # TODO: Unknown
+            last = self._get_int()
+            calculated_length = last + 1 - start
+            if length != calculated_length:
+                warnings.warn("Length mismatch in animation definition '%s': %s vs %s"
+                              % (name, length, calculated_length), RuntimeWarning)
+            animations[name] = Animation(start, length)
 
         self.tiles = tiles
         self.frames = frames
@@ -365,19 +365,22 @@ class Sprite(object):
         """Dump frames of animation as pngs.
 
         Frames will be saved with the pattern %03d.png.
-        Note that animation_name is currently ignored
-          -- all frames will always be dumped.
 
         Arguments:
         target_dir     -- directory to save frames in
         animation_name -- animation to dump
 
         """
-        # TODO: Use animation name
         tiles, frames = self.tiles, self.frames
-        n = len(frames)
+        if animation_name is not None:
+            anim = self.animations[animation_name]
+        else:
+            # All frames
+            anim = Animation(0, len(frames))
+            # animation_name = 'all'
+        start, n = anim
         # Calculate required image size to hold all frames
-        all_tiles = [tile for frame in frames[0:n] for tile in
+        all_tiles = [tile for frame in frames[start:start + n] for tile in
                      tiles[frame.offset:frame.offset + frame.length]]
         max_x = max(tile[0] for tile in all_tiles)
         max_y = max(tile[1] for tile in all_tiles)
@@ -387,7 +390,7 @@ class Sprite(object):
         # Dump images to target directory
         frame_info = []
         for i in range(n):
-            out_img = self.get_frame(i, im_width, im_height)
+            out_img = self.get_frame(start + i, im_width, im_height)
             out_img.save(os.path.join(target_dir, '%03d.png' % i))
             frame_info.append(['%03d.png' % i, frames[i].duration])
         return frame_info
