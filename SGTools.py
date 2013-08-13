@@ -4,6 +4,7 @@ Skullgirls Tools.
 Usage:
     SGTools.py sprite indexed [options] [--no-lines]          <src> <msb> <palette> <output_folder>
     SGTools.py sprite         [options] [--channel=<channel>] <src> <msb> <output_folder>
+    SGTools.py sprite info    <msb>
     SGTools.py -h | --help
     SGTools.py --version
 
@@ -70,14 +71,14 @@ class Sprite(object):
     palette_width = None
     palette_height = None
 
-    def __init__(self, img_filename, msb_filename,
+    def __init__(self, msb_filename, img_filename=None,
                  palette_filename=None, limit_channel=None, lines=True,
                  bg=(255, 255, 255, 0), bg_lerp=None):
         """Initialize Sprite representation.
 
         Arguments:
-        img_filename     -- str, path to texture.
         msb_filename     -- str, path to sprite msb.
+        img_filename     -- str, path to texture.
         palette_filename -- str, path to palette.
                               Will be ignored if channel is limited.
         limit_channel    -- str, channel to output. Omit to composite all
@@ -90,7 +91,8 @@ class Sprite(object):
 
         """
         # Open images
-        self.img = PILImage.open(img_filename)
+        if img_filename:
+            self.img = PILImage.open(img_filename)
         if palette_filename:
             self.palette = PILImage.open(palette_filename)
             self.palette_width, self.palette_height = self.palette.size
@@ -235,6 +237,8 @@ class Sprite(object):
             palette = None
 
         # Convert image to RGBA array
+        if self.img is None:
+            raise RuntimeError("No image loaded.")
         src = self.img.convert('RGBA')
         src = np.array(src)
 
@@ -419,19 +423,30 @@ def _command_line():
     args = docopt(__doc__, version="SGTools v%s" % __version__)
 
     if args['sprite']:
-        constructor_args = {
-            'img_filename': args['<src>'],
-            'msb_filename': args['<msb>'],
-            'palette_filename': args['<palette>'],  # Possibly None
-            'limit_channel': args['--channel'],  # Possibly None
-            'lines': not args['--no-lines'],
-            'bg_lerp': _parse_colour(args['--tile-bg']),
-        }
-        if args['--bg']:
-            constructor_args['bg']=_parse_colour(args['--bg'])
+        if args['info']:
+            # Print sprite info
+            sprite = Sprite(msb_filename=args['<msb>'])
+            print 'Sprite Name:     ', sprite.name
+            print 'Tile Size:       ', sprite.tile_w, 'x', sprite.tile_h
+            print 'Tile Definitions:', len(sprite.tiles)
+            print 'Frames:          ', len(sprite.frames)
+            print 'Animations:      ', len(sprite.animations)
+            print 'Animation names: '
+            print '\n'.join('    ' + name for name in sprite.animations)
+        else:
+            constructor_args = {
+                'img_filename': args['<src>'],
+                'msb_filename': args['<msb>'],
+                'palette_filename': args['<palette>'],  # Possibly None
+                'limit_channel': args['--channel'],  # Possibly None
+                'lines': not args['--no-lines'],
+                'bg_lerp': _parse_colour(args['--tile-bg']),
+            }
+            if args['--bg']:
+                constructor_args['bg'] = _parse_colour(args['--bg'])
 
-        sprite = Sprite(**constructor_args)
-        sprite.dump_animation(args['<output_folder>'], args['--animation'])
+            sprite = Sprite(**constructor_args)
+            sprite.dump_animation(args['<output_folder>'], args['--animation'])
 
 
 if __name__ == '__main__':
