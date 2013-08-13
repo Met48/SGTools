@@ -150,32 +150,48 @@ class Sprite(object):
     def _parse_msb(self):
         """Parse all fields from the msb file."""
 
-        self._take(11)  # Skip signature
+        # Version
+        version = self._get_long()
+        if version != 3:
+            warnings.warn("Version number is not 3: %s" % version, RuntimeWarning)
+
+        # Signature
+        signature = self._take(3)
+        if signature != [50, 46, 48]:
+            warnings.warn("Unrecognized signature: %s" % repr(signature), RuntimeWarning)
+
+        # Get name
         self.name = self._get_string()
-        # Unknown
-        self._get_int()
-        self._get_string()
-        self._get_long()
+
+        # TODO: Unknown
+        self._get_int()  # Always = 0?
+        self._get_string()  # Format specification
+        self._get_long()  # Always = 4?
+
         # Sizes of next data sections
         tile_count = self._get_long()
         frame_count = self._get_long()
         animation_count = self._get_long()
+
         # Tile dimensions
         self.tile_w = self._get_long()
         self.tile_h = self._get_long()
+
         # Tiles
         tiles = []
         for _ in range(tile_count):
             tile = self._take(4)
             tiles.append(tuple(tile))
+
         # Frames
         frames = []
         for _ in range(frame_count):
             offset = self._get_int()
             length = self._get_int()
             duration = self._get_int()
-            self._take(8)  # Unknown
+            self._take(8)  # TODO: Unknown
             frames.append(Frame(offset, length, duration))
+
         # Animations
         animations = {}
         for _ in range(animation_count):
